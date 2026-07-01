@@ -1,0 +1,177 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const App = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch products from MongoDB when 'inventory' tab is clicked
+  useEffect(() => {
+    if (activeTab === 'inventory') {
+      setLoading(true);
+      axios.get('http://localhost:5000/api/products')
+        .then(res => {
+          setProducts(res.data);
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setLoading(false);
+        });
+    }
+  }, [activeTab]);
+
+  const menuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'pos', label: 'Point of Sale', icon: '🛒' },
+    { id: 'repairs', label: 'Repair Bookings', icon: '🔧' },
+    { id: 'inventory', label: 'Inventory', icon: '📦' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
+  ];
+
+  return (
+    <div className="flex h-screen w-screen overflow-hidden bg-gray-50 text-gray-800">
+      
+      {/* Sidebar */}
+      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+        <div className="p-6 border-b border-gray-200">
+          <h1 className="text-2xl font-bold text-pink-500">Mobile Hub</h1>
+          <p className="text-xs text-gray-500 mt-1">Shop Management System</p>
+        </div>
+        
+        <nav className="flex-1 p-4 space-y-2">
+          {menuItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full flex items-center px-4 py-3 rounded-lg text-left transition-colors ${
+                activeTab === item.id
+                  ? 'bg-pink-400 text-white font-semibold shadow-md'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <span className="mr-3 text-xl">{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-gray-200">
+          <div className="bg-green-100 text-green-700 p-3 rounded-lg text-xs font-medium text-center">
+            ✅ Subscription Active
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col">
+        <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
+          <h2 className="text-xl font-semibold capitalize">
+            {activeTab === 'pos' ? 'Point of Sale' : activeTab}
+          </h2>
+          <div className="flex items-center space-x-4">
+            <span className="text-sm text-gray-500">Cashier: Admin</span>
+            <div className="w-10 h-10 bg-pink-400 rounded-full flex items-center justify-center text-white font-bold">
+              A
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 p-6 overflow-y-auto">
+          
+          {/* DASHBOARD */}
+          {activeTab === 'dashboard' && (
+            <div className="grid grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="text-gray-500 text-sm font-semibold mb-2">Today's Sales</h3>
+                <p className="text-3xl font-bold text-pink-500">$1,245.00</p>
+              </div>
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="text-gray-500 text-sm font-semibold mb-2">Active Repairs</h3>
+                <p className="text-3xl font-bold text-pink-500">14</p>
+              </div>
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="text-gray-500 text-sm font-semibold mb-2">Low Stock Alerts</h3>
+                <p className="text-3xl font-bold text-pink-500">3</p>
+              </div>
+            </div>
+          )}
+
+          {/* INVENTORY */}
+          {activeTab === 'inventory' && (
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-semibold text-gray-700">Product Inventory</h3>
+                <button className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                  + Add Product
+                </button>
+              </div>
+              
+              {loading ? (
+                <p className="text-gray-400 text-center py-8">Loading products from database...</p>
+              ) : (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="py-3 px-4 text-gray-500 font-semibold">Name</th>
+                      <th className="py-3 px-4 text-gray-500 font-semibold">SKU</th>
+                      <th className="py-3 px-4 text-gray-500 font-semibold">Category</th>
+                      <th className="py-3 px-4 text-gray-500 font-semibold">Price</th>
+                      <th className="py-3 px-4 text-gray-500 font-semibold">Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((prod) => (
+                      <tr key={prod._id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 font-medium text-gray-800">{prod.name}</td>
+                        <td className="py-3 px-4 text-gray-600">{prod.sku}</td>
+                        <td className="py-3 px-4">
+                          <span className="bg-pink-100 text-pink-700 px-2 py-1 rounded text-xs font-medium">
+                            {prod.category}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-gray-800">${prod.sellingPrice.toFixed(2)}</td>
+                        <td className="py-3 px-4">
+                          <span className={`font-bold ${prod.stockQuantity < 5 ? 'text-red-500' : 'text-green-600'}`}>
+                            {prod.stockQuantity}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {products.length === 0 && (
+                      <tr>
+                        <td colSpan="5" className="py-8 text-center text-gray-400">
+                          No products found. Add some via the backend!
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* OTHER TABS */}
+          {activeTab === 'pos' && (
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-full flex items-center justify-center">
+              <p className="text-gray-400 text-lg">POS Interface Coming Next...</p>
+            </div>
+          )}
+          {activeTab === 'repairs' && (
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-full flex items-center justify-center">
+              <p className="text-gray-400 text-lg">Repair Tracking Coming Next...</p>
+            </div>
+          )}
+          {activeTab === 'settings' && (
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-full flex items-center justify-center">
+              <p className="text-gray-400 text-lg">Settings Coming Next...</p>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default App;
