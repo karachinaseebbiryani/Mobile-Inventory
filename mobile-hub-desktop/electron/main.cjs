@@ -37,8 +37,6 @@ ipcMain.on('print-receipt', (event, htmlContent, printerName) => {
   printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
 
   printWindow.webContents.on('did-finish-load', () => {
-    // If a specific printer (like Dymo) is provided, print silently to it.
-    // Otherwise, print silently to the default printer.
     const options = { silent: true, printBackground: true };
     if (printerName) {
       options.printerName = printerName;

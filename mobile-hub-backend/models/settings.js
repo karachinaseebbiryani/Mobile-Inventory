@@ -6,7 +6,9 @@ const SettingsSchema = new mongoose.Schema({
     taxRate: { type: Number, default: 0 },
     reviewQrUrl: { type: String, default: '' },
     currencySymbol: { type: String, default: '£' },
-    stickerPrinterName: { type: String, default: '' }, // NEW: Dymo printer name
+    stickerPrinterName: { type: String, default: '' },
+    dashboardPin: { type: String, default: '1234' },
+    departments: { type: [String], default: ['Accessories', 'Vapes', 'Prints', 'Top Up', 'Perfume', 'Toys'] },
     receiptSettings: {
         showName: { type: Boolean, default: true },
         showImei: { type: Boolean, default: true },

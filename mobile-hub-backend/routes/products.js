@@ -26,12 +26,13 @@ router.get('/', async (req, res) => {
     }
 });
 
-// Get distinct brands and types for Auto-Suggest
+// Get distinct brands, types, and models for Auto-Suggest Dropdowns
 router.get('/meta/distinct', async (req, res) => {
     try {
         const brands = await Product.distinct('brand');
         const types = await Product.distinct('type');
-        res.json({ brands, types });
+        const models = await Product.distinct('name');
+        res.json({ brands, types, models });
     } catch (err) {
         res.status(500).send('Server Error');
     }
@@ -53,6 +54,58 @@ router.post('/', async (req, res) => {
     try {
         const newProduct = new Product(req.body);
         const product = await newProduct.save();
+        res.json(product);
+    } catch (err) {
+        res.status(500).send('Server Error');
+    }
+});
+
+// Mark product as sold (used by POS for Devices)
+router.put('/:id/sell', async (req, res) => {
+    try {
+        const product = await Product.findByIdAndUpdate(
+            req.params.id, 
+            { isSold: true, soldDate: new Date(), stockQuantity: 0 }, 
+            { new: true }
+        );
+        res.json(product);
+    } catch (err) {
+        res.status(500).send('Server Error');
+    }
+});
+
+// Add Stock & Calculate Average Cost Price
+router.put('/:id/add-stock', async (req, res) => {
+    try {
+        const { quantity, newCostPrice } = req.body;
+        const product = await Product.findById(req.params.id);
+        if (!product) return res.status(404).json({ msg: 'Product not found' });
+
+        const addedQty = parseInt(quantity);
+        const newCost = parseFloat(newCostPrice);
+
+        // 1. Calculate Weighted Average Cost
+        const oldTotalCost = product.costPrice * product.stockQuantity;
+        const newTotalCost = newCost * addedQty;
+        const totalQty = product.stockQuantity + addedQty;
+        
+        let calculatedAverageCost = newCost;
+        if (totalQty > 0) {
+            calculatedAverageCost = Math.round(((oldTotalCost + newTotalCost) / totalQty) * 100) / 100;
+        }
+
+        // 2. Update Product
+        product.stockQuantity = totalQty;
+        product.costPrice = calculatedAverageCost;
+        
+        // 3. Save to Price History
+        product.priceHistory.push({ 
+            costPrice: calculatedAverageCost, 
+            date: new Date(),
+            note: `Added ${addedQty} @ £${newCost.toFixed(2)}`
+        });
+
+        await product.save();
         res.json(product);
     } catch (err) {
         res.status(500).send('Server Error');

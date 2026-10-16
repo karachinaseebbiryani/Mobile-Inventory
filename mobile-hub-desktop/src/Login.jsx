@@ -32,10 +32,10 @@ const Login = ({ onLogin }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Enter Shop Code</label>
-            <input type="text" value={shopCode} onChange={(e) => setShopCode(e.target.value)} required className="w-full border-2 border-gray-200 rounded-lg p-3 text-center text-2xl tracking-widest focus:outline-none focus:border-pink-400" placeholder="123456" />
+            <input type="text" value={shopCode} onChange={(e) => setShopCode(e.target.value)} required className="input-field text-center text-2xl tracking-widest" placeholder="123456" />
           </div>
           {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</p>}
-          <button type="submit" disabled={loading} className="w-full bg-pink-500 hover:bg-pink-600 text-white py-3 rounded-lg font-semibold disabled:opacity-50">{loading ? 'Validating...' : 'Unlock Software'}</button>
+          <button type="submit" disabled={loading} className="btn-primary">{loading ? 'Validating...' : 'Unlock Software'}</button>
         </form>
         <p className="text-xs text-gray-400 text-center mt-4">Don't have a code? Contact your software provider.</p>
       </div>
