@@ -3,7 +3,7 @@ import http from 'node:http';
 import mongoose from 'mongoose';
 import { createApp } from './app';
 import { loadEnv } from './config/env';
-import { ResendVerificationMailer } from './services/email';
+import { SmtpVerificationMailer } from './services/email';
 
 const start = async (): Promise<void> => {
   const env = loadEnv();
@@ -13,7 +13,7 @@ const start = async (): Promise<void> => {
     autoIndex: env.NODE_ENV !== 'production'
   });
 
-  const app = createApp(env, { mailer: new ResendVerificationMailer(env) });
+  const app = createApp(env, { mailer: new SmtpVerificationMailer(env) });
   const server = http.createServer(app);
   server.listen(env.PORT, '0.0.0.0', () => {
     console.log(`SaaS API listening on port ${env.PORT}`);

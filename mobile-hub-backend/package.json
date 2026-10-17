@@ -9,7 +9,7 @@
     "dev:saas": "tsx watch src/server.ts",
     "build:saas": "tsc -p tsconfig.saas.json",
     "test": "npm run test:saas",
-    "test:saas": "tsx --test src/config/env.test.ts src/models/models.test.ts src/services/entitlements.test.ts src/services/signup.test.ts src/app.test.ts src/routes/products.integration.test.ts",
+    "test:saas": "tsx --test src/config/env.test.ts src/models/models.test.ts src/services/email.test.ts src/services/entitlements.test.ts src/services/signup.test.ts src/app.test.ts src/routes/products.integration.test.ts",
     "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
     "bootstrap:admin:compiled": "node dist/scripts/bootstrap-admin.js",
     "migrate:indexes": "node dist/scripts/migrate-indexes.js"
@@ -24,6 +24,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.4.0",
     "multer": "^1.4.5-lts.1",
+    "nodemailer": "^10.1.2",
     "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },
@@ -33,6 +34,7 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^22.7.4",
+    "@types/nodemailer": "^8.0.2",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2"
   }

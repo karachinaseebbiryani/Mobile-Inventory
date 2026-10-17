@@ -8,7 +8,12 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().regex(/^\d+[smhd]$/).default('15m'),
   WEB_ORIGINS: z.string().default('http://localhost:3000'),
   EMAIL_FROM: z.string().email().or(z.string().includes('<')),
-  RESEND_API_KEY: z.string().optional().default(''),
+  SMTP_HOST: z.string().optional().default(''),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: z.string().optional().default(''),
+  SMTP_PASSWORD: z.string().optional().default(''),
+  SMTP_FROM: z.string().optional().default(''),
+  SMTP_USE_TLS: z.enum(['true', 'false']).default('true').transform(value => value === 'true'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
@@ -21,8 +26,12 @@ export const loadEnv = (source: NodeJS.ProcessEnv = process.env): AppEnv => {
       .join('; ');
     throw new Error(`Invalid environment configuration: ${details}`);
   }
-  if (result.data.NODE_ENV === 'production' && !result.data.RESEND_API_KEY) {
-    throw new Error('RESEND_API_KEY is required in production.');
+  if (result.data.NODE_ENV === 'production' &&
+      (!result.data.SMTP_HOST || !result.data.SMTP_USER || !result.data.SMTP_PASSWORD)) {
+    throw new Error('SMTP_HOST, SMTP_USER, and SMTP_PASSWORD are required in production.');
+  }
+  if (result.data.NODE_ENV === 'production' && !result.data.SMTP_USE_TLS) {
+    throw new Error('SMTP_USE_TLS must be true in production.');
   }
   const origins = result.data.WEB_ORIGINS.split(',').map(origin => origin.trim());
   if (origins.some(origin => !origin || origin === '*')) {

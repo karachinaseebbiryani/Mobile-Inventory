@@ -107,7 +107,12 @@ test('products remain isolated between tenant contexts through the API', {
       JWT_EXPIRES_IN: '15m',
       WEB_ORIGINS: 'http://localhost:3000',
       EMAIL_FROM: 'Inventory Test <test@example.test>',
-      RESEND_API_KEY: ''
+      SMTP_HOST: '',
+      SMTP_PORT: 587,
+      SMTP_USER: '',
+      SMTP_PASSWORD: '',
+      SMTP_FROM: '',
+      SMTP_USE_TLS: true
     };
     const mailer: VerificationMailer = {
       async sendVerificationEmail() {
