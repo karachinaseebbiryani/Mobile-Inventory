@@ -11,6 +11,7 @@ import type { RegistrationStore } from './services/signup';
 import { createAdminRouter } from './routes/admin';
 import { createShopRouter } from './routes/shop';
 import { createPublicRouter } from './routes/public';
+import { createProductsRouter } from './routes/products';
 import { errorHandler } from './utils/http';
 
 export interface AppDependencies {
@@ -51,6 +52,7 @@ export const createApp = (env: AppEnv, dependencies: AppDependencies): Express =
   app.use('/api/v1/admin', createAdminRouter());
   app.use('/api/v1/shop', createShopRouter());
   app.use('/api/v1/public', createPublicRouter());
+  app.use('/api/v1/products', createProductsRouter());
 
   app.use((_request, response) => {
     response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found.' } });

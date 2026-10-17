@@ -129,10 +129,25 @@ export const createAuthRouter = (
   router.get('/me', requireAuth, asyncHandler(async (request, response) => {
     const user = await User.findById(request.auth?.userId).select('name email platformRole emailVerifiedAt');
     if (!user) throw new HttpError(401, 'Authentication is no longer valid.', 'INVALID_TOKEN');
-    const applications = await SignupRequest.find({ ownerUserId: user._id })
-      .select('tenantId status reviewedAt rejectionReason createdAt')
-      .sort({ createdAt: -1 })
-      .lean();
+    const [applications, memberships] = await Promise.all([
+      SignupRequest.find({ ownerUserId: user._id })
+        .select('tenantId status reviewedAt rejectionReason createdAt')
+        .sort({ createdAt: -1 })
+        .lean(),
+      TenantMembership.find({ userId: user._id }).lean()
+    ]);
+    const shops = await Promise.all(memberships.map(async membership => {
+      const tenant = await Tenant.findById(membership.tenantId).select('name slug status').lean();
+      if (!tenant) return null;
+      return {
+        id: String(tenant._id),
+        name: tenant.name,
+        slug: tenant.slug,
+        status: tenant.status,
+        role: membership.role,
+        membershipStatus: membership.status
+      };
+    }));
     response.json({
       user: {
         id: String(user._id),
@@ -141,6 +156,7 @@ export const createAuthRouter = (
         platformRole: user.platformRole,
         emailVerified: Boolean(user.emailVerifiedAt)
       },
+      shops: shops.filter((shop): shop is NonNullable<typeof shop> => shop !== null),
       applications: applications.map(application => ({
         id: String(application._id),
         status: application.status,
