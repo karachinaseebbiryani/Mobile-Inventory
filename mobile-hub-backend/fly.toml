@@ -1,4 +1,4 @@
-app = "mobile-inventory-api"
+app = "mobile-inventory"
 primary_region = "lhr"
 
 [build]
