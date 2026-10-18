@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { useRouter } from 'next/navigation';
 import { api, money, productPrice, type ApiError, type Plan, type Product, type Shop, type StorefrontProfile } from '@/lib/api';
 import { StorefrontSettings } from '@/components/storefront-settings';
+import { PosRegister } from '@/components/pos-register';
 
 interface Session {
   user: { id: string; name: string; email: string; platformRole: string; emailVerified: boolean };
@@ -28,13 +29,14 @@ interface ProductFormValues {
   description: string;
   cost: string;
   selling: string;
+  quantity: string;
   currency: string;
   reorder: string;
 }
 
 const blankProduct: ProductFormValues = {
   sku: '', name: '', brand: '', model: '', category: 'Phones', description: '',
-  cost: '', selling: '', currency: 'GBP', reorder: '0'
+  cost: '', selling: '', quantity: '0', currency: 'GBP', reorder: '0'
 };
 
 export function Dashboard() {
@@ -47,10 +49,11 @@ export function Dashboard() {
   const [productTotal, setProductTotal] = useState(0);
   const [productPage, setProductPage] = useState(1);
   const [inventoryEnabled, setInventoryEnabled] = useState(false);
+  const [posEnabled, setPosEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'storefront' | 'subscription' | 'admin'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'pos' | 'storefront' | 'subscription' | 'admin'>('overview');
   const [storefrontProfile, setStorefrontProfile] = useState<StorefrontProfile | null>(null);
   const [ecommerceEnabled, setEcommerceEnabled] = useState(false);
   const [search, setSearch] = useState('');
@@ -90,6 +93,7 @@ export function Dashboard() {
       setProducts([]);
       setProductTotal(0);
       setInventoryEnabled(false);
+      setPosEnabled(false);
       if (result.subscription && ['active', 'trialing'].includes(result.subscription.status)) {
         const [profile, featureResult] = await Promise.all([
           api<{ shop: StorefrontProfile }>('shop/profile', {
@@ -102,6 +106,7 @@ export function Dashboard() {
         setStorefrontProfile(profile.shop);
         setProfileName(profile.shop.branding?.displayName || profile.shop.name);
         setInventoryEnabled(featureResult.features.inventory === true);
+        setPosEnabled(featureResult.features.pos === true && featureResult.features.inventory === true);
         setEcommerceEnabled(featureResult.features.ecommerce === true);
         if (featureResult.features.inventory) await fetchProducts(selected.id);
       }
@@ -123,6 +128,7 @@ export function Dashboard() {
       .then(result => {
         if (!alive) return;
         setSession(result);
+        if (result.user.platformRole === 'super_admin') setActiveTab('admin');
         if (result.shops.length) {
           const savedId = sessionStorage.getItem('activeShopId');
           const selected = result.shops.find(item => item.id === savedId) ?? result.shops[0];
@@ -189,6 +195,7 @@ export function Dashboard() {
       category: product.category, description: product.description || '',
       cost: (product.costPriceMinor / 100).toFixed(2),
       selling: (product.sellingPriceMinor / 100).toFixed(2),
+      quantity: String(product.quantityOnHand ?? 0),
       currency: product.currency, reorder: String(product.reorderLevel)
     });
     setError('');
@@ -208,6 +215,11 @@ export function Dashboard() {
       setError('The reorder alert must be a non-negative whole number.');
       return;
     }
+    const quantityOnHand = Number(form.quantity);
+    if (!Number.isSafeInteger(quantityOnHand) || quantityOnHand < 0) {
+      setError('Stock quantity must be a non-negative whole number.');
+      return;
+    }
     if (!editing && !/^[A-Z]{3}$/.test(form.currency)) {
       setError('Enter a valid three-letter currency code, such as GBP.');
       return;
@@ -223,6 +235,7 @@ export function Dashboard() {
       description: form.description,
       costPriceMinor: cost,
       sellingPriceMinor: selling,
+      quantityOnHand,
       ...(editing ? {} : { currency: form.currency }),
       reorderLevel
     };
@@ -303,6 +316,9 @@ export function Dashboard() {
               <button className={activeTab === 'inventory' ? 'selected' : ''} onClick={() => setActiveTab('inventory')}>
                 <span>▦</span>Inventory{inventoryEnabled && <i className="nav-count">{productTotal}</i>}
               </button>
+              {posEnabled && <button className={activeTab === 'pos' ? 'selected' : ''} onClick={() => setActiveTab('pos')}>
+                <span>＄</span>POS
+              </button>}
               <button className={activeTab === 'storefront' ? 'selected' : ''} onClick={() => setActiveTab('storefront')}>
                 <span>↗</span>Customer storefront
               </button>
@@ -333,7 +349,7 @@ export function Dashboard() {
             <h1>{headerTitle}</h1>
           </div>
           <div className="header-right">
-            {shop && <span className={`shop-status status-${shop.status}`}>{shop.status === 'active' ? '●' : '○'} {shop.status.replace('_', ' ')}</span>}
+            {shop && activeTab !== 'admin' && <span className={`shop-status status-${shop.status}`}>{shop.status === 'active' ? '●' : '○'} {shop.status.replace('_', ' ')}</span>}
             <button className="icon-button" aria-label="Sign out" onClick={logout}>↗</button>
           </div>
         </header>
@@ -391,7 +407,7 @@ export function Dashboard() {
                   <div className="product-table-wrap">
                     <table className="product-table">
                       <thead>
-                        <tr><th>PRODUCT</th><th>SKU</th><th>CATEGORY</th><th>COST</th><th>SELLING PRICE</th><th /></tr>
+                        <tr><th>PRODUCT</th><th>SKU</th><th>CATEGORY</th><th>STOCK</th><th>COST</th><th>SELLING PRICE</th><th /></tr>
                       </thead>
                       <tbody>
                         {products.map(product => (
@@ -404,6 +420,7 @@ export function Dashboard() {
                             </td>
                             <td><code>{product.sku}</code></td>
                             <td><span className="category-pill">{product.category}</span></td>
+                            <td>{product.quantityOnHand ?? 0}</td>
                             <td>{productPrice(product.costPriceMinor, product.currency)}</td>
                             <td className="price-strong">{productPrice(product.sellingPriceMinor, product.currency)}</td>
                             <td>
@@ -445,6 +462,7 @@ export function Dashboard() {
               )}
             </section>
           )}
+          {shop && activeTab === 'pos' && posEnabled && <PosRegister key={shop.id} tenantId={shop.id} onError={setError} />}
           {shop && activeTab === 'subscription' && <SubscriptionPanel subscription={subscription} shop={shop} />}
           {shop && activeTab === 'storefront' && storefrontProfile && (
             <StorefrontSettings
@@ -506,7 +524,7 @@ function ApplicationState({ application }: { application: Session['applications'
 
 function Overview({ name, firstName, shop, subscription, productTotal, inventoryEnabled, products, onInventory }: { name: string; firstName: string; shop: Shop; subscription: SubscriptionInfo | null; productTotal: number; inventoryEnabled: boolean; products: Product[]; onInventory: () => void }) {
   const plan = typeof subscription?.planId === 'object' ? subscription.planId : null;
-  const lowStock = products.filter(item => item.reorderLevel > 0).length;
+  const lowStock = products.filter(item => item.reorderLevel > 0 && (item.quantityOnHand ?? 0) <= item.reorderLevel).length;
   return <><div className="welcome-banner"><div className="welcome-orbit">✳</div><div><div className="eyebrow">A FRESH START</div><h2>Good to have you here, {firstName}.</h2><p>Your {name} workspace is ready to make the day run a little smoother.</p></div><span className="welcome-date">{new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</span></div><div className="overview-heading"><div><div className="eyebrow">SHOP OVERVIEW</div><h2>The essentials, at a glance.</h2></div><span className="overview-slug">Shop slug: {shop.slug}</span></div><div className="stat-grid"><article className="stat-card"><span className="stat-icon green">▦</span><small>ACTIVE PRODUCTS</small><b>{inventoryEnabled ? productTotal : '—'}</b><span>{inventoryEnabled ? 'In your shop catalogue' : 'Not included in current plan'}</span></article><article className="stat-card"><span className="stat-icon lilac">◷</span><small>YOUR PLAN</small><b className="stat-plan">{plan?.name || subscription?.status || 'Pending'}</b><span>{subscription?.status === 'trialing' ? 'Trial period' : subscription?.status === 'active' ? 'Shop subscription' : 'Waiting for approval'}</span></article><article className="stat-card"><span className="stat-icon peach">⌁</span><small>SHOP STATUS</small><b className="stat-plan">{shop.status.replace('_', ' ')}</b><span>Your workspace status</span></article><article className="stat-card"><span className="stat-icon blue">↗</span><small>LOW STOCK RULES</small><b>{inventoryEnabled ? lowStock : '—'}</b><span>{inventoryEnabled ? 'Products with reorder levels' : 'Inventory is not enabled'}</span></article></div><div className="overview-lower"><section className="overview-card"><div className="overview-card-head"><div><div className="eyebrow">RECENT CATALOGUE</div><h3>Your latest products</h3></div><button className="text-link" onClick={onInventory}>View inventory →</button></div>{inventoryEnabled && products.length ? products.slice(0, 4).map(product => <div className="recent-product" key={product._id}><span className="product-thumb">▯</span><div><b>{product.name}</b><small>{product.sku} · {product.category}</small></div><span className="recent-price">{productPrice(product.sellingPriceMinor, product.currency)}</span></div>) : <div className="recent-empty"><span>▦</span><p>{inventoryEnabled ? 'Add a product and it will show up here.' : 'Your plan will determine which shop tools are available.'}</p></div>}</section><section className="overview-card plan-summary"><div className="eyebrow">A LITTLE MORE ROOM TO GROW</div><h3>{plan?.name || 'Your shop is getting ready.'}</h3><p>{subscription?.status === 'active' || subscription?.status === 'trialing' ? 'Your shop tools are ready. Your plan helps shape what you can use.' : 'We’ll let you know when your application is reviewed and your workspace is ready.'}</p><div className="plan-summary-foot"><span className={`status-dot status-${subscription?.status || 'pending'}`} />{subscription?.status || 'application pending'}<button onClick={onInventory}>Explore tools →</button></div></section></div></>;
 }
 
@@ -516,7 +534,7 @@ function SubscriptionPanel({ subscription, shop }: { subscription: SubscriptionI
 }
 
 function ProductDialog({ editing, form, saving, onChange, onClose, onSubmit }: { editing: Product | null; form: ProductFormValues; saving: boolean; onChange: (value: ProductFormValues) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="product-dialog" role="dialog" aria-modal="true" aria-labelledby="product-dialog-title"><div className="modal-close-row"><div><div className="eyebrow">{editing ? 'UPDATE YOUR CATALOGUE' : 'ADD TO YOUR CATALOGUE'}</div><h2 id="product-dialog-title">{editing ? 'Edit product.' : 'Add a product.'}</h2></div><button onClick={onClose} aria-label="Close">×</button></div><form onSubmit={onSubmit}><div className="form-row">{!editing && <label>SKU<input required maxLength={64} value={form.sku} onChange={event => onChange({ ...form, sku: event.target.value })} placeholder="e.g. IPH-13-128" /></label>}<label>Product name<input required maxLength={160} value={form.name} onChange={event => onChange({ ...form, name: event.target.value })} placeholder="e.g. iPhone 13, 128GB" /></label></div><div className="form-row"><label>Brand<input maxLength={100} value={form.brand} onChange={event => onChange({ ...form, brand: event.target.value })} placeholder="Apple" /></label><label>Model<input maxLength={100} value={form.model} onChange={event => onChange({ ...form, model: event.target.value })} placeholder="A2633" /></label></div><div className="form-row"><label>Category<input required maxLength={100} value={form.category} onChange={event => onChange({ ...form, category: event.target.value })} placeholder="Phones" /></label><label>Reorder alert at<input required type="number" min="0" step="1" value={form.reorder} onChange={event => onChange({ ...form, reorder: event.target.value })} /></label></div><label>Description <span className="optional">OPTIONAL</span><textarea maxLength={2000} rows={2} value={form.description} onChange={event => onChange({ ...form, description: event.target.value })} placeholder="Condition, storage, colour or other details" /></label><div className="form-row"><label>Cost price<input required type="number" min="0" step="0.01" value={form.cost} onChange={event => onChange({ ...form, cost: event.target.value })} placeholder="0.00" /></label><label>Selling price<input required type="number" min="0" step="0.01" value={form.selling} onChange={event => onChange({ ...form, selling: event.target.value })} placeholder="0.00" /></label>{!editing && <label>Currency<input required minLength={3} maxLength={3} value={form.currency} onChange={event => onChange({ ...form, currency: event.target.value.toUpperCase() })} /></label>}</div><div className="dialog-actions"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button type="submit" className="button" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Add product'} <span>↗</span></button></div></form></section></div>;
+  return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="product-dialog" role="dialog" aria-modal="true" aria-labelledby="product-dialog-title"><div className="modal-close-row"><div><div className="eyebrow">{editing ? 'UPDATE YOUR CATALOGUE' : 'ADD TO YOUR CATALOGUE'}</div><h2 id="product-dialog-title">{editing ? 'Edit product.' : 'Add a product.'}</h2></div><button onClick={onClose} aria-label="Close">×</button></div><form onSubmit={onSubmit}><div className="form-row">{!editing && <label>SKU<input required maxLength={64} value={form.sku} onChange={event => onChange({ ...form, sku: event.target.value })} placeholder="e.g. IPH-13-128" /></label>}<label>Product name<input required maxLength={160} value={form.name} onChange={event => onChange({ ...form, name: event.target.value })} placeholder="e.g. iPhone 13, 128GB" /></label></div><div className="form-row"><label>Brand<input maxLength={100} value={form.brand} onChange={event => onChange({ ...form, brand: event.target.value })} placeholder="Apple" /></label><label>Model<input maxLength={100} value={form.model} onChange={event => onChange({ ...form, model: event.target.value })} placeholder="A2633" /></label></div><div className="form-row"><label>Category<input required maxLength={100} value={form.category} onChange={event => onChange({ ...form, category: event.target.value })} placeholder="Phones" /></label><label>In stock<input required type="number" min="0" step="1" value={form.quantity} onChange={event => onChange({ ...form, quantity: event.target.value })} /></label><label>Reorder alert at<input required type="number" min="0" step="1" value={form.reorder} onChange={event => onChange({ ...form, reorder: event.target.value })} /></label></div><label>Description <span className="optional">OPTIONAL</span><textarea maxLength={2000} rows={2} value={form.description} onChange={event => onChange({ ...form, description: event.target.value })} placeholder="Condition, storage, colour or other details" /></label><div className="form-row"><label>Cost price<input required type="number" min="0" step="0.01" value={form.cost} onChange={event => onChange({ ...form, cost: event.target.value })} placeholder="0.00" /></label><label>Selling price<input required type="number" min="0" step="0.01" value={form.selling} onChange={event => onChange({ ...form, selling: event.target.value })} placeholder="0.00" /></label>{!editing && <label>Currency<input required minLength={3} maxLength={3} value={form.currency} onChange={event => onChange({ ...form, currency: event.target.value.toUpperCase() })} /></label>}</div><div className="dialog-actions"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button type="submit" className="button" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Add product'} <span>↗</span></button></div></form></section></div>;
 }
 
 interface Application {

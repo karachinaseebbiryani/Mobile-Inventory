@@ -11,6 +11,7 @@ export interface ProductRecord {
   barcode: string | null;
   costPriceMinor: number;
   sellingPriceMinor: number;
+  quantityOnHand: number;
   currency: string;
   reorderLevel: number;
   status: 'active' | 'archived';
@@ -31,6 +32,7 @@ export const productSchema = new Schema<ProductRecord>({
   barcode: { type: String, trim: true, default: null },
   costPriceMinor: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
   sellingPriceMinor: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
+  quantityOnHand: { type: Number, required: true, min: 0, validate: Number.isSafeInteger, default: 0 },
   currency: { type: String, required: true, uppercase: true, minlength: 3, maxlength: 3 },
   reorderLevel: { type: Number, required: true, min: 0, validate: Number.isSafeInteger, default: 0 },
   status: { type: String, enum: ['active', 'archived'], default: 'active', required: true },

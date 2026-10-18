@@ -94,6 +94,7 @@ test('products remain isolated between tenant contexts through the API', {
       costPriceMinor: 10000,
       sellingPriceMinor: 15000,
       currency: 'GBP',
+      quantityOnHand: 0,
       reorderLevel: 1
     });
     assert.ok(foreignProduct);
@@ -181,13 +182,57 @@ test('products remain isolated between tenant contexts through the API', {
         name: 'Tenant A phone',
         costPriceMinor: 10000,
         sellingPriceMinor: 15000,
+        quantityOnHand: 3,
         currency: 'GBP'
       })
     });
     assert.equal(create.status, 201);
-    const createBody = await create.json() as { product: { tenantId: string; sku: string } };
+    const createBody = await create.json() as { product: { _id: string; tenantId: string; sku: string; quantityOnHand: number } };
     assert.equal(createBody.product.tenantId, String(tenantA._id));
     assert.equal(createBody.product.sku, 'TENANT-A-001');
+    assert.equal(createBody.product.quantityOnHand, 3);
+
+    const salesApi = `http://127.0.0.1:${address.port}/api/v1/sales`;
+    const crossTenantSale = await fetch(salesApi, {
+      method: 'POST',
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) },
+      body: JSON.stringify({
+        items: [{ productId: String(foreignProduct._id), quantity: 1 }],
+        paymentMethod: 'cash'
+      })
+    });
+    assert.equal(crossTenantSale.status, 400);
+    assert.equal((await Product.findById(foreignProduct._id))?.quantityOnHand, 0);
+
+    const saleResponse = await fetch(salesApi, {
+      method: 'POST',
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) },
+      body: JSON.stringify({
+        items: [{ productId: createBody.product._id, quantity: 2 }],
+        paymentMethod: 'cash',
+        customerName: 'Test customer'
+      })
+    });
+    assert.equal(saleResponse.status, 201);
+    const saleBody = await saleResponse.json() as { sale: { totalMinor: number; items: Array<{ unitPriceMinor: number; quantity: number }> } };
+    assert.equal(saleBody.sale.totalMinor, 30000);
+    assert.equal(saleBody.sale.items[0]?.unitPriceMinor, 15000);
+    assert.equal((await Product.findById(createBody.product._id))?.quantityOnHand, 1);
+
+    const oversell = await fetch(salesApi, {
+      method: 'POST',
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) },
+      body: JSON.stringify({
+        items: [{ productId: createBody.product._id, quantity: 2 }],
+        paymentMethod: 'cash'
+      })
+    });
+    assert.equal(oversell.status, 409);
+    assert.equal((await Product.findById(createBody.product._id))?.quantityOnHand, 1);
+    const tenantBSales = await fetch(salesApi, { headers: { ...headers, 'x-tenant-id': String(tenantB._id) } });
+    assert.equal(tenantBSales.status, 200);
+    const tenantBSalesBody = await tenantBSales.json() as { data: unknown[] };
+    assert.deepEqual(tenantBSalesBody.data, []);
 
     const publicApi = `http://127.0.0.1:${address.port}/api/v1/public/shops`;
     const tenantAStorefront = await fetch(`${publicApi}/${tenantA.slug}`);

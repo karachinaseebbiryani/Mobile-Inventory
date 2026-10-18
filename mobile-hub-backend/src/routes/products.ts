@@ -19,6 +19,7 @@ const productInput = z.object({
   barcode: z.string().trim().max(128).nullable().default(null),
   costPriceMinor: z.number().int().safe().min(0),
   sellingPriceMinor: z.number().int().safe().min(0),
+  quantityOnHand: z.number().int().safe().min(0).default(0),
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
   reorderLevel: z.number().int().safe().min(0).default(0)
 }).strict();

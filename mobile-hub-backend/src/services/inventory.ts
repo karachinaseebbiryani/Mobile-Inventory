@@ -12,7 +12,7 @@ export interface ProductListOptions {
 export type NewProduct = Pick<
   ProductRecord,
   'sku' | 'name' | 'description' | 'brand' | 'model' | 'category' |
-  'barcode' | 'costPriceMinor' | 'sellingPriceMinor' | 'currency' | 'reorderLevel'
+  'barcode' | 'costPriceMinor' | 'sellingPriceMinor' | 'currency' | 'reorderLevel' | 'quantityOnHand'
 >;
 
 export type ProductUpdate = Partial<Omit<NewProduct, 'sku' | 'currency'>>;

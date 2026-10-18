@@ -110,7 +110,26 @@ export interface Product {
   barcode: string | null;
   costPriceMinor: number;
   sellingPriceMinor: number;
+  quantityOnHand: number;
   currency: string;
   reorderLevel: number;
   status: 'active' | 'archived';
+}
+
+export interface Sale {
+  _id: string;
+  items: Array<{
+    productId: string;
+    sku: string;
+    name: string;
+    quantity: number;
+    unitPriceMinor: number;
+    lineTotalMinor: number;
+  }>;
+  currency: string;
+  subtotalMinor: number;
+  totalMinor: number;
+  paymentMethod: 'cash' | 'card' | 'other';
+  customerName: string;
+  createdAt: string;
 }

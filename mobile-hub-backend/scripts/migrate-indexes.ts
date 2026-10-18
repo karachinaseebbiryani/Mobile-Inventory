@@ -5,6 +5,7 @@ import { AuditLog } from '../src/models/AuditLog';
 import { DomainMapping } from '../src/models/DomainMapping';
 import { Plan } from '../src/models/Plan';
 import { Product } from '../src/models/Product';
+import { Sale } from '../src/models/Sale';
 import { SignupRequest } from '../src/models/SignupRequest';
 import { Subscription } from '../src/models/Subscription';
 import { Tenant } from '../src/models/Tenant';
@@ -33,6 +34,7 @@ const run = async (): Promise<void> => {
       Plan,
       Subscription,
       Product,
+      Sale,
       AuditLog,
       DomainMapping
     ];
@@ -41,6 +43,8 @@ const run = async (): Promise<void> => {
       await model.createIndexes();
       console.log(`Indexes ensured: ${model.modelName}`);
     }
+    phase = 'backfilling product stock';
+    await Product.updateMany({ quantityOnHand: { $exists: false } }, { $set: { quantityOnHand: 0 } });
     phase = 'completed';
   } finally {
     await mongoose.disconnect();
