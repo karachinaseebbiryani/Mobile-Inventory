@@ -7,7 +7,7 @@ import { api, money, type ApiError, type Plan, type Shop } from '@/lib/api';
 
 type Mode = 'login' | 'signup';
 
-export function AuthForm({ mode }: { mode: Mode }) {
+export function AuthForm({ mode, sessionExpired = false }: { mode: Mode; sessionExpired?: boolean }) {
   const router = useRouter();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [busy, setBusy] = useState(false);
@@ -112,6 +112,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         <div className="auth-panel-top"><span>{signup ? 'NEW SHOP APPLICATION' : 'WELCOME BACK'}</span><Link href="/">← Back to home</Link></div>
         <div className="auth-form-wrap">
           <div className="auth-heading"><span className="eyebrow">{signup ? 'LET’S GET YOU SET UP' : 'YOUR SHOP IS WAITING'}</span><h2>{signup ? 'Open your shop.' : 'Good to see you.'}</h2><p>{signup ? 'Tell us a little about you and your shop. We’ll take it from there.' : 'Sign in to pick up right where you left off.'}</p></div>
+          {sessionExpired && !signup && <div className="notice notice-info" role="status"><p>Your sign-in has expired. Sign in again to continue.</p></div>}
           {notice ? <div className="notice notice-success"><b>Application received</b><p>{notice}</p><p>Check your inbox for the verification email. Once verified, your application will be reviewed by the Mobile Hub team.</p><Link href="/login" className="text-link">Continue to sign in →</Link></div> : (
             <form className="auth-form" onSubmit={submit}>
               {signup && <><label>Shop name<input required minLength={2} maxLength={120} value={shopName} onChange={event => changeShopName(event.target.value)} placeholder="e.g. Northside Mobile" /></label><label>Shop slug<div className="slug-input"><input required minLength={3} maxLength={63} pattern="[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?" value={normalizedSlug} onChange={event => setSlug(event.target.value)} placeholder="northside-mobile" /></div><small>Becomes your shop workspace and public storefront link after approval.</small></label><div className="form-row"><label>Your name<input required minLength={2} maxLength={120} value={ownerName} onChange={event => setOwnerName(event.target.value)} placeholder="Alex Morgan" /></label><label>Phone <span className="optional">OPTIONAL</span><input maxLength={40} value={phone} onChange={event => setPhone(event.target.value)} placeholder="+44 7700 900000" /></label></div>{plans.length > 0 && <label>Plan you’re interested in <span className="optional">YOU CAN CHOOSE LATER</span><select value={planId} onChange={event => setPlanId(event.target.value)}><option value="">We’ll help you choose</option>{plans.map(plan => <option key={plan._id} value={plan._id}>{plan.name} — {money(plan.monthlyPriceMinor, plan.currency)} / month</option>)}</select></label>}</>}

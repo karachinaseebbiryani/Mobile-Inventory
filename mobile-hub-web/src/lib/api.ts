@@ -1,4 +1,24 @@
-export type ApiError = Error & { status?: number; code?: string };
+export type ApiError = Error & {
+  status?: number;
+  code?: string;
+  details?: Array<{ path: Array<string | number>; message: string }>;
+};
+
+function validationDetails(value: unknown): ApiError['details'] {
+  if (!Array.isArray(value)) return undefined;
+  const details = value.flatMap(issue => {
+    if (!issue || typeof issue !== 'object') return [];
+    const candidate = issue as { path?: unknown; message?: unknown };
+    if (!Array.isArray(candidate.path) || typeof candidate.message !== 'string') return [];
+    const path: Array<string | number> = [];
+    for (const part of candidate.path) {
+      if (typeof part !== 'string' && typeof part !== 'number') return [];
+      path.push(part);
+    }
+    return [{ path, message: candidate.message }];
+  });
+  return details.length ? details : undefined;
+}
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
@@ -10,13 +30,20 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     cache: 'no-store'
   });
   const payload = await response.json().catch(() => ({})) as {
-    error?: { message?: string; code?: string };
+    error?: { message?: string; code?: string; details?: unknown };
     message?: string;
   };
   if (!response.ok) {
-    const error = new Error(payload.error?.message || payload.message || `Request failed (${response.status}).`) as ApiError;
+    const details = validationDetails(payload.error?.details);
+    const detailMessage = details?.slice(0, 5).map(issue => {
+      const field = issue.path.length ? `${issue.path.join('.')}: ` : '';
+      return `${field}${issue.message}`;
+    }).join(' ');
+    const baseMessage = payload.error?.message || payload.message || `Request failed (${response.status}).`;
+    const error = new Error(detailMessage ? `${baseMessage} ${detailMessage}` : baseMessage) as ApiError;
     error.status = response.status;
     error.code = payload.error?.code;
+    error.details = details;
     throw error;
   }
   return payload as T;
@@ -101,16 +128,25 @@ export interface StorefrontProduct {
 
 export interface Product {
   _id: string;
+  productCode: string;
   sku: string;
   name: string;
   description: string;
   brand: string;
+  itemType: string;
   model: string;
   category: string;
+  color: string;
+  supplierName: string;
+  supplierInvoiceNumber: string;
   barcode: string | null;
   costPriceMinor: number;
   sellingPriceMinor: number;
+  minimumPriceMinor: number;
   quantityOnHand: number;
+  showOnPos: boolean;
+  firstPurchaseDate: string | null;
+  expiryDate: string | null;
   currency: string;
   reorderLevel: number;
   status: 'active' | 'archived';

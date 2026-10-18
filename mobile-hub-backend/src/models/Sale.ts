@@ -31,7 +31,7 @@ const saleLineSchema = new Schema<SaleLineRecord>({
   lineTotalMinor: { type: Number, required: true, min: 0, validate: Number.isSafeInteger }
 }, { _id: false, strict: 'throw' });
 
-const saleSchema = new Schema<SaleRecord>({
+export const saleSchema = new Schema<SaleRecord>({
   tenantId: { type: Schema.Types.ObjectId, ref: 'SaasTenant', required: true, immutable: true },
   cashierId: { type: Schema.Types.ObjectId, ref: 'SaasUser', required: true, immutable: true },
   items: { type: [saleLineSchema], required: true, validate: (items: SaleLineRecord[]) => items.length > 0 },

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth';
+import { initializeTenantDataModels } from '../db/tenantDatabase';
 import {
   requireActiveSubscription,
   requireFeature,
@@ -37,7 +38,8 @@ export const createSalesRouter = (): Router => {
     const context = request.tenantContext;
     if (!context) throw new HttpError(500, 'Tenant authorization middleware is missing.', 'MIDDLEWARE_MISCONFIGURED');
     const query = listQuery.parse(request.query);
-    const result = await listSales(context.tenantId, query.page, query.limit);
+    const models = await initializeTenantDataModels(context.tenantId, context.tenant.storage?.databaseName);
+    const result = await listSales(context.tenantId, query.page, query.limit, models);
     response.json({ data: result.items, pagination: { page: result.page, limit: result.limit, total: result.total } });
   }));
 
@@ -45,7 +47,8 @@ export const createSalesRouter = (): Router => {
     const context = request.tenantContext;
     if (!context) throw new HttpError(500, 'Tenant authorization middleware is missing.', 'MIDDLEWARE_MISCONFIGURED');
     const input = createSaleSchema.parse(request.body);
-    const sale = await createSale(context.tenantId, context.userId, input);
+    const models = await initializeTenantDataModels(context.tenantId, context.tenant.storage?.databaseName);
+    const sale = await createSale(context.tenantId, context.userId, input, models);
     response.status(201).json({ sale });
   }));
 

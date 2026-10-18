@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
+import { getTenantDataModels, tenantDatabaseName } from '../db/tenantDatabase';
 import type { AppEnv } from '../config/env';
 import { FEATURE_KEYS } from '../config/features';
 import { createApp } from '../app';
@@ -29,6 +30,7 @@ test('products remain isolated between tenant contexts through the API', {
   const testDatabase = `mobile_inventory_test_${randomUUID().replace(/-/g, '')}`;
   await mongoose.connect(testMongoUri, { dbName: testDatabase, autoIndex: true });
   let server: http.Server | undefined;
+  const tenantDatabaseNames: string[] = [];
 
   try {
     const user = await User.create({
@@ -46,20 +48,30 @@ test('products remain isolated between tenant contexts through the API', {
       currency: 'GBP',
       features: featureSet
     });
+    const tenantAId = new mongoose.Types.ObjectId();
     const tenantA = await Tenant.create({
+      _id: tenantAId,
       name: 'Tenant A',
       slug: `tenant-a-${randomUUID().slice(0, 8)}`,
       status: 'active',
       ownerUserId: user._id,
-      planId: plan._id
+      planId: plan._id,
+      storage: { mode: 'managed', databaseName: tenantDatabaseName(tenantAId) }
     });
+    tenantDatabaseNames.push(tenantDatabaseName(tenantAId));
+    const tenantBId = new mongoose.Types.ObjectId();
     const tenantB = await Tenant.create({
+      _id: tenantBId,
       name: 'Tenant B',
       slug: `tenant-b-${randomUUID().slice(0, 8)}`,
       status: 'active',
       ownerUserId: user._id,
-      planId: plan._id
+      planId: plan._id,
+      storage: { mode: 'managed', databaseName: tenantDatabaseName(tenantBId) }
     });
+    tenantDatabaseNames.push(tenantDatabaseName(tenantBId));
+    const tenantAProducts = getTenantDataModels(tenantA._id, tenantA.storage.databaseName).Product;
+    const tenantBProducts = getTenantDataModels(tenantB._id, tenantB.storage.databaseName).Product;
     await TenantMembership.create([
       { tenantId: tenantA._id, userId: user._id, role: 'owner', status: 'active' },
       { tenantId: tenantB._id, userId: user._id, role: 'owner', status: 'active' }
@@ -83,19 +95,29 @@ test('products remain isolated between tenant contexts through the API', {
         currentPeriodEnd: periodEnd
       }
     ]);
-    const foreignProduct = await new InventoryService().create(tenantB._id, user._id, {
+    const foreignProduct = await new InventoryService(() => tenantBProducts).create(tenantB._id, user._id, {
+      productCode: 'OTHER-001',
       sku: 'OTHER-SHOP-001',
       name: 'Private tenant B stock',
       description: '',
       brand: '',
+      itemType: 'Product',
       model: '',
+      branch: 'Main branch',
       category: 'Phones',
+      color: '',
+      supplierName: '',
+      supplierInvoiceNumber: '',
       barcode: null,
       costPriceMinor: 10000,
       sellingPriceMinor: 15000,
+      minimumPriceMinor: 0,
       currency: 'GBP',
       quantityOnHand: 0,
-      reorderLevel: 1
+      reorderLevel: 1,
+      showOnPos: true,
+      firstPurchaseDate: null,
+      expiryDate: null
     });
     assert.ok(foreignProduct);
 
@@ -165,6 +187,7 @@ test('products remain isolated between tenant contexts through the API', {
       headers: { ...headers, 'x-tenant-id': String(tenantA._id) },
       body: JSON.stringify({
         tenantId: String(tenantB._id),
+        productCode: 'ATTACK-001',
         sku: 'ATTACK-001',
         name: 'Tenant override attempt',
         costPriceMinor: 100,
@@ -178,8 +201,11 @@ test('products remain isolated between tenant contexts through the API', {
       method: 'POST',
       headers: { ...headers, 'x-tenant-id': String(tenantA._id) },
       body: JSON.stringify({
+        productCode: 'TENANT-A-001',
         sku: 'TENANT-A-001',
         name: 'Tenant A phone',
+        brand: 'Apple',
+        branch: 'Southend',
         costPriceMinor: 10000,
         sellingPriceMinor: 15000,
         quantityOnHand: 3,
@@ -187,12 +213,139 @@ test('products remain isolated between tenant contexts through the API', {
       })
     });
     assert.equal(create.status, 201);
-    const createBody = await create.json() as { product: { _id: string; tenantId: string; sku: string; quantityOnHand: number } };
+    const createBody = await create.json() as { product: { _id: string; tenantId: string; productCode: string; branch: string; sku: string; quantityOnHand: number } };
     assert.equal(createBody.product.tenantId, String(tenantA._id));
+    assert.equal(createBody.product.productCode, 'TENANT-A-001');
+    assert.equal(createBody.product.branch, 'Southend');
     assert.equal(createBody.product.sku, 'TENANT-A-001');
     assert.equal(createBody.product.quantityOnHand, 3);
+    assert.equal(await tenantAProducts.countDocuments({ tenantId: tenantA._id }), 1);
+    assert.equal(await tenantBProducts.countDocuments({ tenantId: tenantB._id }), 1);
+    assert.equal(await Product.countDocuments({ tenantId: { $in: [tenantA._id, tenantB._id] } }), 0);
+
+    const suggestionBrands = ['Application', 'Apple Care', 'AppStore'];
+    await Promise.all(suggestionBrands.map((brand, index) =>
+      new InventoryService(() => tenantAProducts).create(tenantA._id, user._id, {
+        productCode: `SUGGESTION-${index}`,
+        sku: `SUGGESTION-${index}`,
+        name: `Suggestion product ${index}`,
+        description: '',
+        brand,
+        itemType: 'Product',
+        model: '',
+        branch: 'Main branch',
+        category: 'General',
+        color: '',
+        supplierName: '',
+        supplierInvoiceNumber: '',
+        barcode: null,
+        costPriceMinor: 100,
+        sellingPriceMinor: 150,
+        minimumPriceMinor: 0,
+        currency: 'GBP',
+        quantityOnHand: 0,
+        reorderLevel: 0,
+        showOnPos: true,
+        firstPurchaseDate: null,
+        expiryDate: null
+      })
+    ));
+
+    const suggestions = await fetch(`${api}/suggestions?field=brand&query=app`, {
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) }
+    });
+    assert.equal(suggestions.status, 200);
+    const brandSuggestions = (await suggestions.json() as { data: string[] }).data;
+    assert.equal(brandSuggestions.length, 3);
+    assert.ok(brandSuggestions.every(brand => /^app/i.test(brand)));
+    const categorySuggestions = await fetch(`${api}/suggestions?field=category&query=gen`, {
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) }
+    });
+    assert.deepEqual((await categorySuggestions.json() as { data: string[] }).data, ['General']);
+    const nameSuggestions = await fetch(`${api}/suggestions?field=name&query=tenant%20a`, {
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) }
+    });
+    assert.deepEqual((await nameSuggestions.json() as { data: string[] }).data, ['Tenant A phone']);
+    const otherShopSuggestions = await fetch(`${api}/suggestions?field=brand&query=app`, {
+      headers: { ...headers, 'x-tenant-id': String(tenantB._id) }
+    });
+    assert.deepEqual((await otherShopSuggestions.json() as { data: string[] }).data, []);
+    await tenantAProducts.deleteMany({ sku: { $in: suggestionBrands.map((_, index) => `SUGGESTION-${index}`) } });
 
     const salesApi = `http://127.0.0.1:${address.port}/api/v1/sales`;
+    const hideFromPos = await fetch(`${api}/${createBody.product._id}`, {
+      method: 'PATCH',
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) },
+      body: JSON.stringify({ showOnPos: false })
+    });
+    assert.equal(hideFromPos.status, 200);
+    const posProducts = await fetch(`${api}?posOnly=true`, {
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) }
+    });
+    assert.equal((await posProducts.json() as { pagination: { total: number } }).pagination.total, 0);
+    const hiddenPosSale = await fetch(salesApi, {
+      method: 'POST',
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) },
+      body: JSON.stringify({
+        items: [{ productId: createBody.product._id, quantity: 1 }],
+        paymentMethod: 'cash'
+      })
+    });
+    assert.equal(hiddenPosSale.status, 400);
+    assert.equal((await hiddenPosSale.json() as { error: { code: string } }).error.code, 'PRODUCT_NOT_FOR_POS');
+    const restorePos = await fetch(`${api}/${createBody.product._id}`, {
+      method: 'PATCH',
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) },
+      body: JSON.stringify({ showOnPos: true })
+    });
+    assert.equal(restorePos.status, 200);
+
+    const additionalProducts = [
+      { productCode: 'FILTER-PHONE', sku: 'FILTER-PHONE', name: 'Filter phone', itemType: 'Phone', quantityOnHand: 2 },
+      { productCode: 'FILTER-CASE', sku: 'FILTER-CASE', name: 'Filter case', itemType: 'Accessory', quantityOnHand: 0 }
+    ];
+    for (const product of additionalProducts) {
+      const response = await fetch(api, {
+        method: 'POST',
+        headers: { ...headers, 'x-tenant-id': String(tenantA._id) },
+        body: JSON.stringify({
+          ...product,
+          costPriceMinor: 100,
+          sellingPriceMinor: 150,
+          currency: 'GBP'
+        })
+      });
+      assert.equal(response.status, 201);
+    }
+    const filterOptions = await fetch(`${api}/filters`, {
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) }
+    });
+    assert.deepEqual((await filterOptions.json() as { itemTypes: string[] }).itemTypes, ['Accessory', 'Phone', 'Product']);
+    const filteredProducts = await fetch(`${api}?itemType=Phone&hideZeroQuantity=true`, {
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) }
+    });
+    const filteredBody = await filteredProducts.json() as { data: Array<{ itemType: string; quantityOnHand: number }>; pagination: { total: number } };
+    assert.equal(filteredBody.pagination.total, 1);
+    assert.deepEqual(filteredBody.data.map(product => [product.itemType, product.quantityOnHand]), [['Phone', 2]]);
+    const hideZeroQuantity = await fetch(`${api}?hideZeroQuantity=true`, {
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) }
+    });
+    assert.equal((await hideZeroQuantity.json() as { pagination: { total: number } }).pagination.total, 2);
+
+    const duplicateProductCode = await fetch(api, {
+      method: 'POST',
+      headers: { ...headers, 'x-tenant-id': String(tenantA._id) },
+      body: JSON.stringify({
+        productCode: 'TENANT-A-001',
+        sku: 'TENANT-A-DUPLICATE',
+        name: 'Duplicate product code',
+        costPriceMinor: 100,
+        sellingPriceMinor: 150,
+        currency: 'GBP'
+      })
+    });
+    assert.equal(duplicateProductCode.status, 409);
+
     const crossTenantSale = await fetch(salesApi, {
       method: 'POST',
       headers: { ...headers, 'x-tenant-id': String(tenantA._id) },
@@ -202,7 +355,7 @@ test('products remain isolated between tenant contexts through the API', {
       })
     });
     assert.equal(crossTenantSale.status, 400);
-    assert.equal((await Product.findById(foreignProduct._id))?.quantityOnHand, 0);
+    assert.equal((await tenantBProducts.findById(foreignProduct._id))?.quantityOnHand, 0);
 
     const saleResponse = await fetch(salesApi, {
       method: 'POST',
@@ -217,7 +370,7 @@ test('products remain isolated between tenant contexts through the API', {
     const saleBody = await saleResponse.json() as { sale: { totalMinor: number; items: Array<{ unitPriceMinor: number; quantity: number }> } };
     assert.equal(saleBody.sale.totalMinor, 30000);
     assert.equal(saleBody.sale.items[0]?.unitPriceMinor, 15000);
-    assert.equal((await Product.findById(createBody.product._id))?.quantityOnHand, 1);
+    assert.equal((await tenantAProducts.findById(createBody.product._id))?.quantityOnHand, 1);
 
     const oversell = await fetch(salesApi, {
       method: 'POST',
@@ -228,7 +381,7 @@ test('products remain isolated between tenant contexts through the API', {
       })
     });
     assert.equal(oversell.status, 409);
-    assert.equal((await Product.findById(createBody.product._id))?.quantityOnHand, 1);
+    assert.equal((await tenantAProducts.findById(createBody.product._id))?.quantityOnHand, 1);
     const tenantBSales = await fetch(salesApi, { headers: { ...headers, 'x-tenant-id': String(tenantB._id) } });
     assert.equal(tenantBSales.status, 200);
     const tenantBSalesBody = await tenantBSales.json() as { data: unknown[] };
@@ -377,6 +530,7 @@ test('products remain isolated between tenant contexts through the API', {
       );
     }
     await Promise.all([
+      ...tenantDatabaseNames.map(name => mongoose.connection.useDb(name).dropDatabase()),
       User.deleteMany({}),
       Tenant.deleteMany({}),
       TenantMembership.deleteMany({}),

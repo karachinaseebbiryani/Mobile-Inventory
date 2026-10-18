@@ -10,7 +10,8 @@ const objectId = '[a-f\\d]{24}';
 const allowed = (method: string, path: string): boolean => {
   if (method === 'GET' && ['public/plans', 'auth/me', 'shop/profile', 'shop/features', 'shop/subscription', 'shop/database/status', 'admin/applications', 'admin/plans', 'products', 'sales'].includes(path)) return true;
   if (method === 'GET' && /^public\/shops\/[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/.test(path)) return true;
-  if (method === 'POST' && ['auth/register', 'auth/verify-email', 'auth/resend-verification', 'auth/login', 'auth/logout', 'admin/plans', 'sales'].includes(path)) return true;
+  if (method === 'GET' && ['products/filters', 'products/suggestions'].includes(path)) return true;
+  if (method === 'POST' && ['auth/register', 'auth/verify-email', 'auth/resend-verification', 'auth/login', 'auth/logout', 'admin/plans', 'products', 'sales'].includes(path)) return true;
   if (method === 'PATCH' && path === 'shop/profile') return true;
   if (method === 'GET' && new RegExp(`^(products/${objectId})$`).test(path)) return true;
   if (method === 'PATCH' && new RegExp(`^(products/${objectId}|admin/plans/${objectId})$`).test(path)) return true;

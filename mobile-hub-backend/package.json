@@ -9,10 +9,11 @@
     "dev:saas": "tsx watch src/server.ts",
     "build:saas": "tsc -p tsconfig.saas.json",
     "test": "npm run test:saas",
-    "test:saas": "tsx --test src/config/env.test.ts src/models/models.test.ts src/services/email.test.ts src/services/entitlements.test.ts src/services/signup.test.ts src/app.test.ts src/routes/products.integration.test.ts",
+    "test:saas": "tsx --test src/config/env.test.ts src/models/models.test.ts src/services/email.test.ts src/services/entitlements.test.ts src/services/signup.test.ts src/services/inventory.test.ts src/app.test.ts src/routes/products.integration.test.ts",
     "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
     "bootstrap:admin:compiled": "node dist/scripts/bootstrap-admin.js",
-    "migrate:indexes": "node dist/scripts/migrate-indexes.js"
+    "migrate:indexes": "node dist/scripts/migrate-indexes.js",
+    "migrate:tenant-databases": "node dist/scripts/migrate-tenant-databases.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

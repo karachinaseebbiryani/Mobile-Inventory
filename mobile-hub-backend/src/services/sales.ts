@@ -1,6 +1,7 @@
 import mongoose, { type Types } from 'mongoose';
 import { Product } from '../models/Product';
 import { Sale } from '../models/Sale';
+import { getTenantDataModels, type TenantDataModels } from '../db/tenantDatabase';
 import { HttpError } from '../utils/http';
 
 export interface NewSaleInput {
@@ -12,8 +13,10 @@ export interface NewSaleInput {
 export const createSale = async (
   tenantId: Types.ObjectId,
   cashierId: Types.ObjectId,
-  input: NewSaleInput
+  input: NewSaleInput,
+  tenantModels: TenantDataModels = getTenantDataModels(tenantId)
 ) => {
+  const { Product, Sale } = tenantModels;
   if (input.items.length === 0) {
     throw new HttpError(400, 'Add at least one product to the sale.', 'EMPTY_SALE');
   }
@@ -22,7 +25,7 @@ export const createSale = async (
     throw new HttpError(400, 'Sale products must be unique valid product IDs.', 'INVALID_SALE_PRODUCTS');
   }
 
-  const session = await mongoose.startSession();
+  const session = await Product.db.startSession();
   let createdSale: Record<string, unknown> | null = null;
   try {
     await session.withTransaction(async () => {
@@ -38,6 +41,9 @@ export const createSale = async (
       const lines = input.items.map(item => {
         const product = byId.get(item.productId);
         if (!product) throw new HttpError(400, 'Sale product is unavailable.', 'SALE_PRODUCT_UNAVAILABLE');
+        if (product.showOnPos === false) {
+          throw new HttpError(400, `${product.name} is not enabled for point of sale.`, 'PRODUCT_NOT_FOR_POS');
+        }
         if (!Number.isSafeInteger(product.quantityOnHand) || product.quantityOnHand < item.quantity) {
           throw new HttpError(409, `${product.name} does not have enough stock.`, 'INSUFFICIENT_STOCK');
         }
@@ -100,8 +106,10 @@ export const createSale = async (
 export const listSales = async (
   tenantId: Types.ObjectId,
   page: number,
-  limit: number
+  limit: number,
+  tenantModels: TenantDataModels = getTenantDataModels(tenantId)
 ) => {
+  const { Sale } = tenantModels;
   const [items, total] = await Promise.all([
     Sale.find({ tenantId })
       .sort({ createdAt: -1, _id: -1 })

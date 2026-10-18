@@ -17,6 +17,7 @@ declare global {
           status: string;
           planId?: Types.ObjectId | null;
           featureOverrides?: Record<string, boolean | null | undefined>;
+          storage?: { databaseName?: string | null };
         };
         membership: {
           role: string;

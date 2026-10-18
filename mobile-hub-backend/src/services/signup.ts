@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
 import mongoose from 'mongoose';
 import { AuditLog } from '../models/AuditLog';
+import { tenantDatabaseName } from '../db/tenantDatabase';
 import { Plan } from '../models/Plan';
 import { SignupRequest } from '../models/SignupRequest';
 import { Subscription } from '../models/Subscription';
@@ -94,12 +95,15 @@ export class MongooseRegistrationStore implements RegistrationStore {
           emailVerificationExpiresAt: data.verificationExpiresAt
         }], { session });
         if (!user) throw new Error('Failed to create signup user.');
+        const tenantId = new mongoose.Types.ObjectId();
         const [tenant] = await Tenant.create([{
+          _id: tenantId,
           name: data.input.shopName,
           slug: data.input.slug,
           status: 'pending',
           ownerUserId: user._id,
-          branding: { displayName: data.input.shopName }
+          branding: { displayName: data.input.shopName },
+          storage: { mode: 'managed', databaseName: tenantDatabaseName(tenantId) }
         }], { session });
         if (!tenant) throw new Error('Failed to create signup tenant.');
         await TenantMembership.create([{

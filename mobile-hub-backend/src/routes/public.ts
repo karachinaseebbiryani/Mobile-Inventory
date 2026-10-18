@@ -2,7 +2,7 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { Plan } from '../models/Plan';
-import { Product } from '../models/Product';
+import { initializeTenantDataModels } from '../db/tenantDatabase';
 import { Subscription } from '../models/Subscription';
 import { Tenant } from '../models/Tenant';
 import { resolveEntitlements } from '../services/entitlements';
@@ -31,7 +31,7 @@ export const createPublicRouter = (): Router => {
     const slug = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/).parse(request.params.slug);
     const query = storefrontQuery.parse(request.query);
     const tenant = await Tenant.findOne({ slug, status: 'active' })
-      .select('name slug branding businessSettings status planId featureOverrides')
+      .select('name slug branding businessSettings status planId featureOverrides storage.databaseName')
       .lean();
     if (!tenant || tenant.branding?.storefrontContent?.enabled === false) {
       response.status(404).json({ error: { code: 'STOREFRONT_NOT_FOUND', message: 'This shop is not available.' } });
@@ -53,6 +53,7 @@ export const createPublicRouter = (): Router => {
       return;
     }
 
+    const Product = (await initializeTenantDataModels(tenant._id, tenant.storage?.databaseName)).Product;
     const filter: mongoose.FilterQuery<InstanceType<typeof Product>> = {
       tenantId: tenant._id,
       status: 'active'

@@ -8,6 +8,8 @@ import { Subscription } from './Subscription';
 import { AuditLog } from './AuditLog';
 import { DomainMapping } from './DomainMapping';
 import { Product } from './Product';
+import { getTenantDataModels, tenantDatabaseName } from '../db/tenantDatabase';
+import mongoose from 'mongoose';
 
 test('platform tenant, identity, billing, audit, and domain schemas enforce core indexes', () => {
   assert.ok(Tenant.schema.indexes().some(([keys, options]) => keys.slug === 1 && options.unique === true));
@@ -36,6 +38,22 @@ test('tenant JSON and user schema do not expose database secrets or password has
       encryptedUri: 'ciphertext',
       keyVersion: 'key-v1'
     }
+  });
+
+  test('managed shop operational models use separate MongoDB databases', () => {
+    const tenantA = new mongoose.Types.ObjectId();
+    const tenantB = new mongoose.Types.ObjectId();
+    const databaseA = tenantDatabaseName(tenantA);
+    const databaseB = tenantDatabaseName(tenantB);
+    const modelsA = getTenantDataModels(tenantA, databaseA);
+    const modelsB = getTenantDataModels(tenantB, databaseB);
+
+    assert.notEqual(databaseA, databaseB);
+    assert.equal(modelsA.Product.db.name, databaseA);
+    assert.equal(modelsA.Sale.db.name, databaseA);
+    assert.equal(modelsB.Product.db.name, databaseB);
+    assert.notEqual(modelsA.Product.db, modelsB.Product.db);
+    assert.equal(getTenantDataModels(tenantA).Product, Product);
   });
   const json = tenant.toJSON() as { storage: Record<string, unknown> };
   assert.equal(json.storage.encryptedUri, undefined);

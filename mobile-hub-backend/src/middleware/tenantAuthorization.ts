@@ -24,7 +24,7 @@ export const requireTenantMembership: RequestHandler = async (request, _response
     if (!membership) throw new HttpError(403, 'You do not have access to this shop.', 'TENANT_ACCESS_DENIED');
 
     const tenant = await Tenant.findById(tenantId)
-      .select('status planId featureOverrides')
+      .select('status planId featureOverrides storage.databaseName')
       .lean();
     if (!tenant) throw new HttpError(404, 'Shop not found.', 'TENANT_NOT_FOUND');
 

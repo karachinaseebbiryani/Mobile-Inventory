@@ -21,7 +21,7 @@ export function PosRegister({ tenantId, onError }: Props) {
   const checkoutInFlight = useRef(false);
 
   const loadProducts = useCallback(async (searchTerm = '') => {
-    const params = new URLSearchParams({ limit: '100' });
+    const params = new URLSearchParams({ limit: '100', posOnly: 'true' });
     if (searchTerm.trim()) params.set('search', searchTerm.trim());
     const result = await api<{ data: Product[] }>(`products?${params.toString()}`, {
       headers: { 'x-tenant-id': tenantId }
